@@ -2918,6 +2918,11 @@ abstract class BleManagerHandler extends RequestHandler {
 					cpr.notifyConnectionPriorityChanged(gatt.getDevice(), interval, latency, timeout);
 					cpr.notifySuccess(gatt.getDevice());
 				}
+				if (serviceDiscoveryRequested) {
+					log(Log.VERBOSE, () -> "Discovering services...");
+					log(Log.DEBUG, () -> "gatt.discoverServices()");
+					bluetoothGatt.discoverServices();
+				}
 			} else if (status == 0x3b) { // HCI_ERR_UNACCEPT_CONN_INTERVAL
 				Log.e(TAG, "onConnectionUpdated received status: Unacceptable connection interval, " +
 						"interval: " + interval + ", latency: " + latency + ", timeout: " + timeout);
