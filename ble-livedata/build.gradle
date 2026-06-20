@@ -35,7 +35,7 @@ dependencies {
     api project(':ble')
 
     // https://developer.android.com/jetpack/androidx/releases/lifecycle
-    api 'androidx.lifecycle:lifecycle-livedata:2.9.3'
+    api 'androidx.lifecycle:lifecycle-livedata:2.11.0'
 }
 
 // === Maven Central configuration ===
