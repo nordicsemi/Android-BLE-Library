@@ -14,7 +14,7 @@ buildscript {
         classpath 'com.android.tools.build:gradle:8.13.0'
         classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
         classpath "org.jetbrains.kotlin:compose-compiler-gradle-plugin:$kotlin_version"
-        classpath "com.google.dagger:hilt-android-gradle-plugin:2.57.1"
+        classpath "com.google.dagger:hilt-android-gradle-plugin:2.60.1"
         classpath "io.github.gradle-nexus:publish-plugin:$gradle_nexus_publish_plugin"
         classpath "com.squareup.wire:wire-gradle-plugin:5.4.0"
     }
