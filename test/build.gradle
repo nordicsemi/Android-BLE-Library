@@ -14,7 +14,7 @@ android {
 
     defaultConfig {
         applicationId "no.nordicsemi.andorid.ble.test"
-        minSdk 21
+        minSdk 23
         targetSdk 36
         versionCode 1
         versionName "1.0"
@@ -48,6 +48,11 @@ android {
             excludes += '/META-INF/{AL2.0,LGPL2.1}'
         }
     }
+    testOptions {
+        unitTests {
+            returnDefaultValues = true
+        }
+    }
 }
 
 dependencies {
@@ -78,4 +83,7 @@ dependencies {
 
     // Test
     testImplementation 'junit:junit:4.13.2'
+    testImplementation 'org.robolectric:robolectric:4.16.1'
+    testImplementation 'androidx.test:core:1.7.0'
+    testImplementation 'org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2'
 }
