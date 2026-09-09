@@ -69,6 +69,19 @@ public interface ConnectionObserver {
 	 * but this seems to fix the problem only before a new bond is created.
 	 */
 	int REASON_UNSUPPORTED_CONFIGURATION = 11;
+	/**
+	 * The connection could not be established, or was terminated, because the app is missing
+	 * a permission required to use Bluetooth, that is {@link android.Manifest.permission#BLUETOOTH_CONNECT}
+	 * on Android 12 (API 31) and newer.
+	 * <p>
+	 * This is reported when a call to the Android Bluetooth API threw a {@link SecurityException},
+	 * which happens when the permission was never granted, or was revoked by the user in the
+	 * system settings. Note, that revoking a permission kills the app process, so this is most
+	 * likely to be seen when the app connects automatically after being restarted.
+	 * <p>
+	 * Request the missing permission and try connecting again.
+	 */
+	int REASON_PERMISSION_DENIED = 12;
 
 	/**
 	 * Called when the Android device started connecting to given device.
