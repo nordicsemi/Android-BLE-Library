@@ -759,33 +759,54 @@ abstract class BleManagerHandler extends RequestHandler {
 		}
 		connectionTime = SystemClock.elapsedRealtime();
 		earlyPhyLe2MRequest = false;
-		if (Build.VERSION.SDK_INT > Build.VERSION_CODES.O) {
-			// connectRequest will never be null here.
-			final int preferredPhy = connectRequest.getPreferredPhy();
-			log(Log.DEBUG, () ->
-					"gatt = device.connectGatt(autoConnect = " + autoConnect + ", TRANSPORT_LE, "
-							+ ParserUtils.phyMaskToString(preferredPhy) + ")");
+		try {
+			if (Build.VERSION.SDK_INT > Build.VERSION_CODES.O) {
+				// connectRequest will never be null here.
+				final int preferredPhy = connectRequest.getPreferredPhy();
+				log(Log.DEBUG, () ->
+						"gatt = device.connectGatt(autoConnect = " + autoConnect + ", TRANSPORT_LE, "
+								+ ParserUtils.phyMaskToString(preferredPhy) + ")");
 
-			bluetoothGatt = device.connectGatt(context, autoConnect, gattCallback,
-					BluetoothDevice.TRANSPORT_LE, preferredPhy, handler);
-		} else if (Build.VERSION.SDK_INT == Build.VERSION_CODES.O) {
-			// connectRequest will never be null here.
-			final int preferredPhy = connectRequest.getPreferredPhy();
-			log(Log.DEBUG, () ->
-					"gatt = device.connectGatt(autoConnect = " + autoConnect + ", TRANSPORT_LE, "
-							+ ParserUtils.phyMaskToString(preferredPhy) + ")");
-			// A variant of connectGatt with Handled can't be used here.
-			// Check https://github.com/NordicSemiconductor/Android-BLE-Library/issues/54
-			// This bug specifically occurs in SDK 26 and is fixed in SDK 27
-			bluetoothGatt = device.connectGatt(context, autoConnect, gattCallback,
-					BluetoothDevice.TRANSPORT_LE, preferredPhy/*, handler*/);
-		} else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-			log(Log.DEBUG, () -> "gatt = device.connectGatt(autoConnect = " + autoConnect + ", TRANSPORT_LE)");
-			bluetoothGatt = device.connectGatt(context, autoConnect, gattCallback,
-					BluetoothDevice.TRANSPORT_LE);
-		} else {
-			log(Log.DEBUG, () -> "gatt = device.connectGatt(autoConnect = " + autoConnect + ")");
-			bluetoothGatt = device.connectGatt(context, autoConnect, gattCallback);
+				bluetoothGatt = device.connectGatt(context, autoConnect, gattCallback,
+						BluetoothDevice.TRANSPORT_LE, preferredPhy, handler);
+			} else if (Build.VERSION.SDK_INT == Build.VERSION_CODES.O) {
+				// connectRequest will never be null here.
+				final int preferredPhy = connectRequest.getPreferredPhy();
+				log(Log.DEBUG, () ->
+						"gatt = device.connectGatt(autoConnect = " + autoConnect + ", TRANSPORT_LE, "
+								+ ParserUtils.phyMaskToString(preferredPhy) + ")");
+				// A variant of connectGatt with Handled can't be used here.
+				// Check https://github.com/NordicSemiconductor/Android-BLE-Library/issues/54
+				// This bug specifically occurs in SDK 26 and is fixed in SDK 27
+				bluetoothGatt = device.connectGatt(context, autoConnect, gattCallback,
+						BluetoothDevice.TRANSPORT_LE, preferredPhy/*, handler*/);
+			} else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+				log(Log.DEBUG, () -> "gatt = device.connectGatt(autoConnect = " + autoConnect + ", TRANSPORT_LE)");
+				bluetoothGatt = device.connectGatt(context, autoConnect, gattCallback,
+						BluetoothDevice.TRANSPORT_LE);
+			} else {
+				log(Log.DEBUG, () -> "gatt = device.connectGatt(autoConnect = " + autoConnect + ")");
+				bluetoothGatt = device.connectGatt(context, autoConnect, gattCallback);
+			}
+		} catch (final SecurityException e) {
+			// device.connectGatt(...) throws a SecurityException when the BLUETOOTH_CONNECT
+			// permission has been revoked, for example in the system settings. As the connection
+			// state was set to CONNECTING above, it has to be rolled back here, otherwise the
+			// manager would be stuck in that state and the request queue would stay blocked.
+			log(Log.ERROR, e::getLocalizedMessage);
+			connectionState = BluetoothGatt.STATE_DISCONNECTED;
+			connectionTime = 0L;
+			initialConnection = false;
+			bluetoothDevice = null;
+			final ConnectRequest cr = this.connectRequest;
+			this.connectRequest = null;
+			if (cr != null) {
+				cr.notifyFail(device, FailCallback.REASON_REQUEST_FAILED);
+			}
+			postConnectionStateChange(o -> o.onDeviceFailedToConnect(device,
+					ConnectionObserver.REASON_PERMISSION_DENIED));
+			nextRequest(true);
+			throw e;
 		}
 
 		if (autoConnect && this.connectRequest != null) {
