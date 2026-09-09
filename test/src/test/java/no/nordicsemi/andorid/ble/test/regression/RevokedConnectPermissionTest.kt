@@ -10,6 +10,7 @@ import androidx.test.core.app.ApplicationProvider
 import kotlinx.coroutines.runBlocking
 import no.nordicsemi.android.ble.BleManager
 import no.nordicsemi.android.ble.ktx.suspend
+import no.nordicsemi.android.ble.observer.ConnectionObserver
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.fail
@@ -118,7 +119,7 @@ class RevokedConnectPermissionTest {
         try {
             manager.connect(device).enqueue()
             fail("Expected connectGatt(...) to throw a SecurityException")
-        } catch (expected: SecurityException) {
+        } catch (_: SecurityException) {
             // Expected.
         }
         ShadowLooper.shadowMainLooper().idle()
@@ -166,11 +167,38 @@ class RevokedConnectPermissionTest {
         )
     }
 
+    /**
+     * The failure must be reported to the [ConnectionObserver] with a reason that tells the app
+     * what actually went wrong, so it can re-request the permission instead of guessing.
+     */
+    @Test
+    fun observerIsNotifiedWithPermissionDeniedReason() {
+        var failedDevice: BluetoothDevice? = null
+        var failureReason: Int? = null
+        manager.setConnectionObserver(object : ConnectionObserver {
+            override fun onDeviceConnecting(device: BluetoothDevice) = Unit
+            override fun onDeviceConnected(device: BluetoothDevice) = Unit
+            override fun onDeviceReady(device: BluetoothDevice) = Unit
+            override fun onDeviceDisconnecting(device: BluetoothDevice) = Unit
+            override fun onDeviceDisconnected(device: BluetoothDevice, reason: Int) = Unit
+            override fun onDeviceFailedToConnect(device: BluetoothDevice, reason: Int) {
+                failedDevice = device
+                failureReason = reason
+            }
+        })
+
+        connectExpectingSecurityException()
+        ShadowLooper.shadowMainLooper().idle()
+
+        assertEquals(device, failedDevice)
+        assertEquals(ConnectionObserver.REASON_PERMISSION_DENIED, failureReason)
+    }
+
     private fun connectExpectingSecurityException() {
         try {
             runBlocking { manager.connect(device).suspend() }
             fail("Expected connectGatt(...) to throw a SecurityException")
-        } catch (expected: SecurityException) {
+        } catch (_: SecurityException) {
             // This is what the app sees on a real device after the permission was revoked.
         }
         // Nothing was created, the connection attempt never started.
