@@ -30,7 +30,8 @@ sealed class ConnectionState {
             LINK_LOSS,
             NOT_SUPPORTED,
             CANCELLED,
-            TIMEOUT;
+            TIMEOUT,
+            PERMISSION_DENIED;
 
             companion object {
                 internal fun parse(reason: Int): Reason = when (reason) {
@@ -41,6 +42,7 @@ sealed class ConnectionState {
                     ConnectionObserver.REASON_NOT_SUPPORTED -> NOT_SUPPORTED
                     ConnectionObserver.REASON_CANCELLED -> CANCELLED
                     ConnectionObserver.REASON_TIMEOUT -> TIMEOUT
+                    ConnectionObserver.REASON_PERMISSION_DENIED -> PERMISSION_DENIED
                     else -> UNKNOWN
                 }
             }
@@ -57,6 +59,10 @@ sealed class ConnectionState {
         /** Whether the connection timed out. */
         val isTimeout: Boolean
             get() = reason == Reason.TIMEOUT
+
+        /** Whether a permission required to use Bluetooth is missing. */
+        val isPermissionDenied: Boolean
+            get() = reason == Reason.PERMISSION_DENIED
     }
 
     /**
