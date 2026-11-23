@@ -33,14 +33,18 @@ import androidx.core.content.ContextCompat;
 
 import java.lang.reflect.Method;
 import java.security.InvalidParameterException;
+import java.util.ArrayList;
 import java.util.Deque;
 import java.util.HashMap;
+import java.util.IdentityHashMap;
 import java.util.LinkedList;
+import java.util.List;
 import java.util.Map;
-import java.util.Timer;
-import java.util.TimerTask;
 import java.util.UUID;
 import java.util.concurrent.LinkedBlockingDeque;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 
 import no.nordicsemi.android.ble.annotation.ConnectionPriority;
 import no.nordicsemi.android.ble.annotation.ConnectionState;
@@ -82,6 +86,9 @@ abstract class BleManagerHandler extends RequestHandler {
 	private final static String ERROR_NOTIFY = "Error on sending notification/indication";
 
 	private final Object LOCK = new Object();
+	private final Object delayedExecutorLock = new Object();
+	private ScheduledThreadPoolExecutor delayedExecutor;
+	private final Map<Runnable, List<ScheduledFuture<?>>> pendingDelayedTasks = new IdentityHashMap<>();
 	private BluetoothDevice bluetoothDevice;
 	/* package */ BluetoothGatt bluetoothGatt;
 	private BleManager manager;
@@ -569,6 +576,7 @@ abstract class BleManagerHandler extends RequestHandler {
 				postConnectionStateChange(o -> o.onDeviceDisconnected(oldBluetoothDevice, ConnectionObserver.REASON_SUCCESS));
 			}
 		}
+		shutdownDelayedExecutor();
 	}
 
 	/**
@@ -1766,17 +1774,63 @@ abstract class BleManagerHandler extends RequestHandler {
 
 	@Override
 	public void postDelayed(@NonNull final Runnable r, final long delayMillis) {
-		new Timer().schedule(new TimerTask() {
-			@Override
-			public void run() {
-				r.run();
+		synchronized (delayedExecutorLock) {
+			if (delayedExecutor == null || delayedExecutor.isShutdown()) {
+				final ScheduledThreadPoolExecutor executor = new ScheduledThreadPoolExecutor(1, runnable -> {
+					final Thread thread = new Thread(runnable, "BleDelayedWork");
+					thread.setDaemon(true);
+					return thread;
+				});
+				executor.setRemoveOnCancelPolicy(true);
+				delayedExecutor = executor;
 			}
-		}, delayMillis);
+			final List<ScheduledFuture<?>> futures =
+					pendingDelayedTasks.computeIfAbsent(r, k -> new ArrayList<>(1));
+			final ScheduledFuture<?>[] holder = new ScheduledFuture<?>[1];
+			holder[0] = delayedExecutor.schedule(() -> {
+				try {
+					r.run();
+				} finally {
+					synchronized (delayedExecutorLock) {
+						final List<ScheduledFuture<?>> list = pendingDelayedTasks.get(r);
+						if (list != null) {
+							list.remove(holder[0]);
+							if (list.isEmpty()) {
+								pendingDelayedTasks.remove(r);
+							}
+						}
+					}
+				}
+			}, Math.max(0L, delayMillis), TimeUnit.MILLISECONDS);
+			futures.add(holder[0]);
+		}
 	}
 
 	@Override
 	public void removeCallbacks(@NonNull final Runnable r) {
-		handler.removeCallbacks(r);
+		final List<ScheduledFuture<?>> toCancel;
+		synchronized (delayedExecutorLock) {
+			toCancel = pendingDelayedTasks.remove(r);
+		}
+		if (toCancel != null) {
+			for (final ScheduledFuture<?> future : toCancel) {
+				future.cancel(false);
+			}
+		}
+		final Handler currentHandler = this.handler;
+		if (currentHandler != null) {
+			currentHandler.removeCallbacks(r);
+		}
+	}
+
+	private void shutdownDelayedExecutor() {
+		synchronized (delayedExecutorLock) {
+			if (delayedExecutor != null) {
+				delayedExecutor.shutdownNow();
+				delayedExecutor = null;
+			}
+			pendingDelayedTasks.clear();
+		}
 	}
 
 	// Helper methods
